@@ -91,8 +91,19 @@ Puppet::Type.type(:package).provide :yum, :parent => :rpm, :source => :rpm do
     self.debug "Ensuring => #{should}"
     wanted = @resource[:name]
     operation = :install
-    enablerepo = @resource[:enablerepo]
+
+    fulldisablerepo = []
     disablerepo= @resource[:disablerepo]
+    disablerepo.each do |value|
+      disablerepo += [ "--disablerepo=" + value ]
+    end
+
+    fullenablerepo = []
+    enablerepo = @resource[:enablerepo]
+    enablerepo.each do |value|
+      fullenablerepo += [ "--enablerepo=" + value ]
+    end
+
 
     case should
     when true, false, Symbol
@@ -108,17 +119,11 @@ Puppet::Type.type(:package).provide :yum, :parent => :rpm, :source => :rpm do
       end
     end
 
-    fullenablerepo = []
-    enablerepo.each do |value|
-      fullenablerepo += [ "--enablerepo=" + value ]
+    if fullenablerepo == [] and fulldisablerepo == []
+     yum "-d", "0", "-e", "0", "-y", operation, wanted
+    else
+     yum "-d", "0", "-e", "0", "-y", fulldisablerepo, fullenablerepo, operation, wanted
     end
-
-    fulldisablerepo = []
-    disablerepo.each do |value|
-      disablerepo += [ "--disablerepo=" + value ]
-    end
-
-    yum "-d", "0", "-e", "0", "-y", fullenablerepo, fulldisablerepo, operation, wanted
 
     is = self.query
     raise Puppet::Error, "Could not find package #{self.name}" unless is
