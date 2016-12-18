@@ -5,3 +5,4 @@
 # The vendored library 'rgen' is loaded on demand.
 # The vendored library 'pathspec' is loaded on demand.
 # The vendored library 'deep_merge' is loaded on demand.
+# The vendored library 'opentracing' is loaded on demand.
