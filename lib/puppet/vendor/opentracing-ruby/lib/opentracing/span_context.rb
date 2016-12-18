@@ -9,7 +9,7 @@ module OpenTracing
     # @param id the ID of the Context
     # @param trace_id the ID of the current trace
     # @param baggage baggage
-    def initialize(baggage: {})
+    def initialize(baggage: Hash.new)
     end
   end
 end
