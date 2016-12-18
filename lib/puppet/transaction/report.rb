@@ -132,6 +132,9 @@ class Puppet::Transaction::Report
   #
   attr_accessor :resources_failed_to_generate
 
+  # @return [Array<Hash>] An array of OpenZipkin trace data.
+  attr_accessor :traces
+
   def self.from_data_hash(data)
     obj = self.allocate
     obj.initialize_from_hash(data)
@@ -227,6 +230,7 @@ class Puppet::Transaction::Report
     @noop = Puppet[:noop]
     @noop_pending = false
     @corrective_change = false
+    @traces = []
   end
 
   # @api private
@@ -257,6 +261,10 @@ class Puppet::Transaction::Report
 
     if cached_catalog_status = data['cached_catalog_status']
       @cached_catalog_status = cached_catalog_status
+    end
+
+    if traces = data['traces']
+      @traces = traces
     end
 
     if @time.is_a? String
@@ -305,6 +313,7 @@ class Puppet::Transaction::Report
       'metrics' => @metrics,
       'resource_statuses' => @resource_statuses,
       'corrective_change' => @corrective_change,
+      'traces' => @traces,
     }
   end
 

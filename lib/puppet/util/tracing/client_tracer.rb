@@ -67,7 +67,7 @@ module Puppet::Util
       end
 
       def finish_span(span)
-        # TODO: Log span to report.
+        report.traces.push(span.to_h)
 
         @current_span = span.parent
       end
