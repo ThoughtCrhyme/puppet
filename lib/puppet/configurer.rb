@@ -10,6 +10,8 @@ class Puppet::Configurer
   require 'puppet/configurer/plugin_handler'
   require 'puppet/configurer/downloader_factory'
 
+  require 'puppet/util/tracing/client_tracer'
+
   include Puppet::Configurer::FactHandler
 
   # For benchmarking
@@ -187,6 +189,11 @@ class Puppet::Configurer
     # exceptions.
     options[:report] ||= Puppet::Transaction::Report.new("apply", nil, @environment, @transaction_uuid)
     report = options[:report]
+    if (Puppet[:profile])
+      OpenTracing.global_tracer = Puppet::Util::Tracing::ClientTracer.new(report)
+      # Won't get finished or reported, but we need a common root span.
+      OpenTracing.global_tracer.start_span('puppet-agent.configurer')
+    end
     init_storage
 
     Puppet::Util::Log.newdestination(report)
