@@ -4,6 +4,7 @@ require 'json'
 
 require 'puppet/network/http'
 require 'puppet/network/http_pool'
+require 'puppet/util/tracing'
 
 # Access objects via REST
 class Puppet::Indirector::REST < Puppet::Indirector::Terminus
@@ -146,7 +147,28 @@ class Puppet::Indirector::REST < Puppet::Indirector::Terminus
 
   def http_request(method, request, *args)
     conn = network(request)
-    conn.send(method, *args)
+
+    if (Puppet[:profile])
+      span = OpenTracing.global_tracer.start_span(args[0].split('?').first)
+      header = case method
+               when :post, :put
+                 args[2]
+               else
+                 args[1]
+               end
+
+      OpenTracing.global_tracer.inject(span.context, OpenTracing::FORMAT_TEXT_MAP, header)
+      span.log(event: 'cs') # Zipkin "client start" event.
+    end
+
+    result = conn.send(method, *args)
+
+    if (Puppet[:profile])
+      span.log(event: 'cr') # Zipkin "client receive" event.
+      span.finish
+    end
+
+    result
   end
 
   def find(request)
