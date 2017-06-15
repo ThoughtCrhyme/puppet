@@ -1,5 +1,6 @@
 require 'puppet/application'
 require 'puppet/error'
+require 'puppet/util/execution'
 
 # A general class for triggering a run of another
 # class.
@@ -74,7 +75,13 @@ class Puppet::Agent
         exit(-2)
       end
     end
-    exit_code = Process.waitpid2(child_pid)
+
+    exit_code = if Puppet[:runtimeout] > 0
+                  Puppet::Util::Execution.wait_with_timeout(child_pid, Puppet[:runtimeout])
+                else
+                  Process.waitpid2(child_pid)
+                end
+
     case exit_code[1].exitstatus
     when -1
       raise SystemExit

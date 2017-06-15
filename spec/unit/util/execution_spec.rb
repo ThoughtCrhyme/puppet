@@ -684,4 +684,33 @@ describe Puppet::Util::Execution do
       expect(Puppet::Util::Execution.execpipe('echo hello', false)).to eq('error message')
     end
   end
+
+  describe '#wait_with_timeout' do
+    it 'returns the child exit code on success' do
+      child_pid = Process.spawn(Puppet::Util::Execution.ruby_path,
+                                '-e',
+                                'exit 42')
+
+      Process.expects(:kill).never
+
+      exit_status = Puppet::Util::Execution.wait_with_timeout(child_pid, 5)
+
+      expect(exit_status.first).to eq(child_pid)
+      expect(exit_status.last).to be_a(Process::Status)
+
+      expect(exit_status.last.exitstatus).to eq(42)
+    end
+
+    it 'kills the child when the timeout is exceeded' do
+      expected_signal = Puppet.features.microsoft_windows? ? :KILL : :TERM
+
+      child_pid = Process.spawn(Puppet::Util::Execution.ruby_path,
+                                '-e',
+                                'sleep(5)')
+
+      Process.expects(:kill).with(expected_signal, child_pid)
+
+      Puppet::Util::Execution.wait_with_timeout(child_pid, 1)
+    end
+  end
 end

@@ -89,6 +89,47 @@ module Puppet::Util::Execution
     output
   end
 
+  # Wait for a process to exit or kill it after a given timeout
+  #
+  # This function polls for the exit status of a child process. If the
+  # supplied timeout is exceeded, then the child is terminated.
+  #
+  # @param child_pid [Integer] The PID of the process to monitor.
+  # @param timeout [Integer] The maximum amount of time to wait, in seconds.
+  #
+  # @return [Array<Integer, Process::Status>] A two element array containing
+  #   the PID of the monitored process along with a Process::Status object
+  #   containing its exit status as returned by Process.waitpid2.
+  def self.wait_with_timeout(child_pid, timeout)
+    # TODO: Use a monotonic clock.
+    deadline = Time.now + timeout
+    # The Process module on Windows only supports :KILL, unless a win32
+    # extension gem is used. Even then, the :TERM supplied is equivalent
+    # to :KILL
+    kill_signal = Puppet.features.microsoft_windows? ? :KILL : :TERM
+
+    loop do
+      # Poll status of child process without blocking. Returns nil
+      # if the process has not exited.
+      status = Process.waitpid2(child_pid, Process::WNOHANG)
+
+      return status unless status.nil?
+
+      # TODO: Use a monotonic clock.
+      if Time.now > deadline
+        Puppet.err(_('Child process exceded timeout. Sending %{signal} signal to PID %{pid}') %
+                   {pid: child_pid,
+                    signal: kill_signal})
+
+        Process.kill(kill_signal, child_pid)
+
+        return Process.waitpid2(child_pid)
+      else
+        sleep(1)
+      end
+    end
+  end
+
   def self.exitstatus
     $CHILD_STATUS.exitstatus
   end
