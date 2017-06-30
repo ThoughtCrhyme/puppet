@@ -75,7 +75,7 @@ module Puppet::Network::HTTP
     # @!macro common_options
     # @api public
     def get(path, headers = {}, options = {})
-      request_with_redirects(Net::HTTP::Get.new(path, headers), options)
+      do_request(Net::HTTP::Get.new(path, headers), options)
     end
 
     # @param path [String]
@@ -86,7 +86,7 @@ module Puppet::Network::HTTP
     def post(path, data, headers = nil, options = {})
       request = Net::HTTP::Post.new(path, headers)
       request.body = data
-      request_with_redirects(request, options)
+      do_request(request, options)
     end
 
     # @param path [String]
@@ -94,7 +94,7 @@ module Puppet::Network::HTTP
     # @!macro common_options
     # @api public
     def head(path, headers = {}, options = {})
-      request_with_redirects(Net::HTTP::Head.new(path, headers), options)
+      do_request(Net::HTTP::Head.new(path, headers), options)
     end
 
     # @param path [String]
@@ -102,7 +102,7 @@ module Puppet::Network::HTTP
     # @!macro common_options
     # @api public
     def delete(path, headers = {'Depth' => 'Infinity'}, options = {})
-      request_with_redirects(Net::HTTP::Delete.new(path, headers), options)
+      do_request(Net::HTTP::Delete.new(path, headers), options)
     end
 
     # @param path [String]
@@ -113,7 +113,7 @@ module Puppet::Network::HTTP
     def put(path, data, headers = nil, options = {})
       request = Net::HTTP::Put.new(path, headers)
       request.body = data
-      request_with_redirects(request, options)
+      do_request(request, options)
     end
 
     def request(method, *args)
@@ -163,6 +163,55 @@ module Puppet::Network::HTTP
     end
 
     private
+
+    def do_request(request, options, site = @site, redirect_counter = 0)
+      if redirect_counter > @redirect_limit
+        raise RedirectionLimitExceededException,
+              _("Too many HTTP redirections for %{host}:%{port}") % {host: @host, port: @port}
+      end
+
+      apply_options_to(request, options)
+
+      response = with_connection(site) {|c| execute_request(c, request) }
+
+      case response.code.to_i
+      when 301, 302, 307
+        # Recurse on redirection
+        location = URI.parse(response['location'])
+        site.move_to(location)
+
+        next_request = request.class.new(location.path)
+        next_request.body = request.body
+        request.each do |header, value|
+          next_request[header] = value
+        end
+
+        do_request(next_request, options, site, redirect_counter + 1)
+      when 503, 429
+        retry_after = response['Retry-After']
+        return response if retry_after.nil?
+
+        begin
+          retry_sleep = Integer(retry_after)
+        rescue TypeError, ArgumentError
+          Puppet.err(_('Recieved a %{status_code} response from the server, but the Retry-After header was set to %{retry_after} which could not be converted to an integer.') %
+                     {status_code: response.code,
+                      retry_after: retry_after})
+
+          return response
+        end
+
+        Puppet.warning(_('Recieved a %{status_code} response from the server. Sleeping for %{retry_after} seconds before retrying the request.') %
+                       {status_code: response.code,
+                        retry_after: retry_after})
+
+        sleep(retry_sleep)
+
+        do_request(request, options, site, redirect_counter)
+      end
+
+      response
+    end
 
     def request_with_redirects(request, options)
       current_request = request
