@@ -83,7 +83,23 @@ class Puppet::Util::Storage
     Puppet.info "Creating state file #{Puppet[:statefile]}" unless Puppet::FileSystem.exist?(Puppet[:statefile])
 
     Puppet::Util.benchmark(:debug, "Stored state") do
-      Puppet::Util::Yaml.dump(@@state, Puppet[:statefile])
+      Puppet::Util::Yaml.dump(prune(@@state), Puppet[:statefile])
+    end
+  end
+
+  # Remove stale entries from the state hash
+  #
+  # This method filters out state entries for which the checked time is older
+  # than a given cutoff. This filter prevents the accumulation of resources in
+  # the statefile which are no longer present in catalogs currently being
+  # applied by the agent.
+  def self.prune(state_hash)
+    if Puppet[:statettl] > 0
+      cutoff = (Time.now - Puppet[:statettl])
+
+      state_hash.filter {|k, v| v[:checked] > cutoff}
+    else
+      state_hash
     end
   end
 end

@@ -1391,6 +1391,14 @@ EOT
         this file reflects the state discovered through interacting
         with clients."
       },
+    :statettl => {
+      :default => "1d",
+      :type => :duration,
+      :desc => "A time to live set on entries in the statefile. An entry
+        will be dropped from the statefile when its last checked time
+        exceeds the given TTL. This commonly happens to entries corresponding
+        to resources that are no longer managed by the puppet agent. #{AS_DURATION}"
+      },
     :transactionstorefile => {
       :default => "$statedir/transactionstore.yaml",
       :type => :file,
